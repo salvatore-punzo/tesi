@@ -334,6 +334,10 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	cout<<"x: "<<coo_f_base[0]<<endl;
 	cout<<"y: "<<coo_f_base[1]<<endl;
 	cout<<"z: "<<coo_f_base[2]<<endl;
+	cout<<"angoli di rotazioni terna base-floating base"<<endl;
+	cout<<"roll: "<<roll<<endl;
+	cout<<"pitch: "<<pitch<<endl;
+	cout<<"yaw: "<<yaw;
 
 }
 
