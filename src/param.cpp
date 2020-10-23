@@ -65,6 +65,11 @@ class ROS_SUB {
 		float _kflp;
 		float _kfrp;
 
+		float _rblp;
+		float _rbrp;
+		float _rflp;
+		float _rfrp;
+
 		float _hip_j_blfr;
 		float _hip_j_brfl;
 
@@ -76,8 +81,8 @@ class ROS_SUB {
 		float eef_fl_z;
 		float eef_fr_z;
 
-		float _ee_f_blfr;
-		float _ee_f_brfl;
+		Vector3d _ee_f_vb_rl;
+		Vector3d _ee_f_vb_ll;
 
 		float _len_leg_bl;
         float _len_leg_br;
@@ -92,6 +97,16 @@ class ROS_SUB {
 		float z_f_base;
 
 		float coo_f_base[2];
+
+		Vector3d eef_bl_wc;
+		Vector3d eef_br_wc;
+		Vector3d eef_fl_wc;
+		Vector3d eef_fr_wc;
+
+		Matrix3d rot_world_virtual_base;
+
+		float eef_vb_rlz;
+		float eef_vb_llz;
 
 
 
@@ -143,6 +158,11 @@ void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 	_kflp = js->position[6];
 	_kfrp = js->position[9];
 
+	_rblp = js->position[2]; //back_left_roll_joint
+	_rbrp = js->position[5];
+	_rflp = js->position[8];
+	_rfrp = js->position[11];
+
 
 	
 
@@ -154,21 +174,19 @@ void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 
 void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 	
-	float alpha = - _kblp/2;
-
-	Vector3d eef_bl(eebl->states[0].total_wrench.force.x, eebl->states[0].total_wrench.force.y, 
-	eebl->states[0].total_wrench.force.z);
-
-	Matrix3d rot_y;
+	float alpha = - _kblp/2; //la forza misurata dal vettore ha asse x lungo la gamba fisica. Se ruoto di questa 
+	Matrix3d rot_y;//quantità porto il vettore ad avere asse z lungo la componente della gamba virtuale.
+	
 	rot_y << cos(alpha), 0, sin(alpha),
 			0, 1, 0,
 			- sin(alpha), 0, cos(alpha);
-
+/*
 	Vector3d sele_z(0,0,1);
 	Vector3d n_eef_bl = rot_y * eef_bl;
 	eef_bl_z = n_eef_bl.transpose() * sele_z;
-/*	
- // prova se il risultato è plausibile
+
+		
+  prova se il risultato è plausibile
 	cout<<"vettore di partenza: " <<eef_bl<<endl;
 	cout<<"vettore ruotato: "<<n_eef_bl<<endl;
 
@@ -176,6 +194,36 @@ void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 	cout <<"componenz z:"<<comp_z<<endl;
 
 */
+	
+	//la considerazione fatta sopra alla fine non mi serve perchè io voglio il vettore nel S. di riferiento mondo
+	
+	Matrix3d rot_knee;
+	Matrix3d rot_pitch;
+	Matrix3d rot_roll;
+
+	
+	
+	Vector3d eef_bl(eebl->states[0].total_wrench.force.x, eebl->states[0].total_wrench.force.y, 
+	eebl->states[0].total_wrench.force.z);
+
+	rot_knee << 1, 0, 0,
+			0, cos(_kblp), -sin(_kblp),
+			0, sin(_kblp), cos(_kblp);
+
+	rot_pitch << 1, 0, 0,
+			0, cos(- hp.bl), -sin(- hp.bl),
+			0, sin(- hp.bl), cos(- hp.bl);
+	
+
+	
+	rot_roll << cos(- _rblp), 0, sin(- _rblp),
+			0, 1, 0,
+			- sin(- _rblp), 0, cos(-_rblp);
+
+	eef_bl_wc = rot_roll * rot_pitch * rot_knee * eef_bl;
+	//cout<<"forza bl nel sistema di riferimento world:"<<endl;
+	//cout<<eef_bl_wc <<endl;
+
 	x_c.bl = eebl->states[0].contact_positions[0].x;
 	y_c.bl = eebl->states[0].contact_positions[0].y;
 	z_c.bl = eebl->states[0].contact_positions[0].z;
@@ -184,46 +232,69 @@ void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 }
 void ROS_SUB::eebr_cb(gazebo_msgs::ContactsStateConstPtr eebr){
 
-		float alpha = - _kbrp/2;
+	Vector3d sele_z(0,0,1);
+	Matrix3d rot_knee;
+	Matrix3d rot_pitch;
+	Matrix3d rot_roll;
 	
 	Vector3d eef_br( eebr->states[0].total_wrench.force.x,
 	eebr->states[0].total_wrench.force.y, eebr->states[0].total_wrench.force.z);
 
-	Matrix3d rot_y;
-	rot_y << cos(alpha), 0, sin(alpha),
+	rot_knee << 1, 0, 0,
+			0, cos(- _kbrp), -sin(- _kbrp),
+			0, sin( _kbrp), cos(- _kbrp);
+
+	rot_pitch << 1, 0, 0,
+			0, cos(hp.br), -sin(hp.br),
+			0, sin(hp.br), cos(hp.br);
+	
+
+	
+	rot_roll << cos(- _rbrp), 0, sin(- _rbrp),
 			0, 1, 0,
-			- sin(alpha), 0, cos(alpha);
+			- sin(- _rbrp), 0, cos(-_rbrp);
 
+	eef_br_wc = rot_roll * rot_pitch * rot_knee * eef_br;
 
-	Vector3d sele_z(0,0,1);
+	
 
-	Vector3d n_eef_br = rot_y * eef_br;
-	eef_br_z = n_eef_br.transpose() * sele_z;
+	
 
 	x_c.br= eebr->states[0].contact_positions[0].x;
 	y_c.br= eebr->states[0].contact_positions[0].y;
 	z_c.br= eebr->states[0].contact_positions[0].z;
 
-	//cout<<eebr->states[0];
+	
 }
 
 void ROS_SUB::eefl_cb(gazebo_msgs::ContactsStateConstPtr eefl){
 
-			float alpha = - _kflp/2;
+	Vector3d sele_z(0,0,1);
+	Matrix3d rot_knee;
+	Matrix3d rot_pitch;
+	Matrix3d rot_roll;
 
 	
 	Vector3d eef_fl(eefl->states[0].total_wrench.force.x,
 	eefl->states[0].total_wrench.force.y, eefl->states[0].total_wrench.force.z);
 
-	Matrix3d rot_y;
-	rot_y << cos(alpha), 0, sin(alpha),
+	rot_knee << 1, 0, 0,
+			0, cos(_kflp), -sin(_kflp),
+			0, sin(_kflp), cos(_kbrp);
+
+	rot_pitch << 1, 0, 0,
+			0, cos(- hp.fl), -sin(- hp.fl),
+			0, sin(- hp.fl), cos(- hp.fl);
+	
+
+	
+	rot_roll << cos(_rflp), 0, sin(_rflp),
 			0, 1, 0,
-			- sin(alpha), 0, cos(alpha);
+			- sin(_rflp), 0, cos(_rflp);
 
+	eef_fl_wc = rot_roll * rot_pitch * rot_knee * eef_fl;
 
-	Vector3d sele_z(0,0,1);
-	Vector3d n_eef_fl = rot_y * eef_fl;
-	eef_fl_z = n_eef_fl.transpose() * sele_z;
+	
 	
 	x_c.fl= eefl->states[0].contact_positions[0].x;
 	y_c.fl= eefl->states[0].contact_positions[0].y;
@@ -232,20 +303,31 @@ void ROS_SUB::eefl_cb(gazebo_msgs::ContactsStateConstPtr eefl){
 }
 void ROS_SUB::eefr_cb(gazebo_msgs::ContactsStateConstPtr eefr){
 	
-	float alpha = - _kfrp/2;
+	Vector3d sele_z(0,0,1);
+	Matrix3d rot_knee;
+	Matrix3d rot_pitch;
+	Matrix3d rot_roll;
 
 	Vector3d eef_fr(eefr->states[0].total_wrench.force.x,
 	eefr->states[0].total_wrench.force.y, eefr->states[0].total_wrench.force.z);
 
-	Matrix3d rot_y;
-	rot_y << cos(alpha), 0, sin(alpha),
+	rot_knee << 1, 0, 0,
+			0, cos(- _kfrp), -sin(- _kfrp),
+			0, sin(- _kfrp), cos(- _kfrp);
+
+	rot_pitch << 1, 0, 0,
+			0, cos(hp.fr), -sin(hp.fr),
+			0, sin(hp.fr), cos(hp.fr);
+	
+
+	
+	rot_roll << cos(_rfrp), 0, sin(_rfrp),
 			0, 1, 0,
-			- sin(alpha), 0, cos(alpha);
+			- sin(_rfrp), 0, cos(_rfrp);
 
+	eef_fr_wc = rot_roll * rot_pitch * rot_knee * eef_fr;
 
-	Vector3d sele_z(0,0,1);
-	Vector3d n_eef_fr = rot_y * eef_fr;
-	eef_fr_z = n_eef_fr.transpose() * sele_z;
+	
 
 	x_c.fr= eefr->states[0].contact_positions[0].x;
 	y_c.fr= eefr->states[0].contact_positions[0].y;
@@ -271,20 +353,23 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
  void ROS_SUB::Calculate_poligono_sup(){
 
     while(ros::ok()){
+		Vector3d sele_z(0,0,1);
+		float cop_x;
+		float cop_y;
 
 		//sono i parametri della gamba destra del bipede
 
         _len_leg_blfr = ( _len_leg_bl +_len_leg_fr )/2;
         _hip_j_blfr =( hp.bl + hp.fr )/2;
         _hip_eff_blfr = he.bl + he.fr;
-        _ee_f_blfr = 2 * eef_bl_z; 
+        _ee_f_vb_rl = 2 * eef_bl_wc; 
 
 		//sono i parametri della gamba sinistra del bipede
 
         _len_leg_brfl = ( _len_leg_br +_len_leg_fl )/2;
         _hip_j_brfl = ( hp.br + hp.fl )/2;
         _hip_eff_brfl = he.br + he.fl;
-		_ee_f_brfl = 2 * eef_br_z; 
+		_ee_f_vb_ll = 2 * eef_br_wc; 
 	/*
 		//float y;
 		//float x;
@@ -305,6 +390,17 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 
 	xc_vb_ll = (x_c.br + x_c.fl)/2;
 	yc_vb_ll = (y_c.br + y_c.fl)/2;
+
+	cout<<"coordinata x del piede destro del virtual biped: "<<xc_vb_rl<<endl;
+	cout<<"coordinata y del piede destro del virtual biped: "<<xc_vb_rl<<endl;
+	cout<<"coordinata x del piede sinistro del virtual biped: "<<xc_vb_ll<<endl;
+	cout<<"coordinata y del piede sinistro del virtual biped: "<<xc_vb_ll<<endl;
+//Calcolo componente z della forza 
+	eef_vb_rlz =_ee_f_vb_rl.transpose() * sele_z;
+	eef_vb_llz =_ee_f_vb_ll.transpose() * sele_z;
+
+	cop_x = (eef_vb_rlz * xc_vb_rl + eef_vb_llz * xc_vb_ll)/(eef_vb_rlz+ eef_vb_llz);
+	cop_y = (eef_vb_rlz * yc_vb_rl + eef_vb_llz * yc_vb_ll)/(eef_vb_rlz+ eef_vb_llz);
 	
     }
 
@@ -321,6 +417,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	tf::Quaternion q(pt->pose[1].orientation.x, pt->pose[1].orientation.y, pt->pose[1].orientation.z, pt->pose[1].orientation.w);
 	double roll, pitch, yaw;
 	tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+	//TO DO: AGGIUNGI QUESTA ROTAZIONE AI VETTORI _WC
+	//rot_world_virtual_base << cos(yaw)*cos(pitch), cos()sin()sin(), ...
 
 	x_f_base = pt->pose[1].position.x;
 	y_f_base = pt->pose[1].position.y;
@@ -330,6 +428,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	coo_f_base[1] = pt->pose[1].position.y;
 	coo_f_base[2] = pt->pose[1].position.z;
 
+/*  test
 	cout<<"coordinate floating base:"<<endl;
 	cout<<"x: "<<coo_f_base[0]<<endl;
 	cout<<"y: "<<coo_f_base[1]<<endl;
@@ -337,7 +436,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	cout<<"angoli di rotazioni terna base-floating base"<<endl;
 	cout<<"roll: "<<roll<<endl;
 	cout<<"pitch: "<<pitch<<endl;
-	cout<<"yaw: "<<yaw;
+	cout<<"yaw: "<<yaw<<endl;
+	*/
 
 }
 
