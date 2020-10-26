@@ -220,10 +220,11 @@ void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 			0, 1, 0,
 			- sin(- _rblp), 0, cos(-_rblp);
 
-	eef_bl_wc = rot_roll * rot_pitch * rot_knee * eef_bl;
-	//cout<<"forza bl nel sistema di riferimento world:"<<endl;
-	//cout<<eef_bl_wc <<endl;
-
+	eef_bl_wc = rot_world_virtual_base * rot_roll * rot_pitch * rot_knee * eef_bl;
+/*
+	cout<<"forza bl nel sistema di riferimento world:"<<endl;
+	cout<<eef_bl_wc <<endl;
+*/
 	x_c.bl = eebl->states[0].contact_positions[0].x;
 	y_c.bl = eebl->states[0].contact_positions[0].y;
 	z_c.bl = eebl->states[0].contact_positions[0].z;
@@ -254,10 +255,11 @@ void ROS_SUB::eebr_cb(gazebo_msgs::ContactsStateConstPtr eebr){
 			0, 1, 0,
 			- sin(- _rbrp), 0, cos(-_rbrp);
 
-	eef_br_wc = rot_roll * rot_pitch * rot_knee * eef_br;
-
-	
-
+	eef_br_wc = rot_world_virtual_base * rot_roll * rot_pitch * rot_knee * eef_br;
+/*
+	cout<<"forza br nel sistema di riferimento world:"<<endl;
+	cout<<eef_br_wc <<endl;
+*/
 	
 
 	x_c.br= eebr->states[0].contact_positions[0].x;
@@ -292,10 +294,11 @@ void ROS_SUB::eefl_cb(gazebo_msgs::ContactsStateConstPtr eefl){
 			0, 1, 0,
 			- sin(_rflp), 0, cos(_rflp);
 
-	eef_fl_wc = rot_roll * rot_pitch * rot_knee * eef_fl;
-
-	
-	
+	eef_fl_wc = rot_world_virtual_base * rot_roll * rot_pitch * rot_knee * eef_fl;
+/*
+	cout<<"forza fl nel sistema di riferimento world:"<<endl;
+	cout<<eef_fl_wc <<endl;
+*/	
 	x_c.fl= eefl->states[0].contact_positions[0].x;
 	y_c.fl= eefl->states[0].contact_positions[0].y;
 	z_c.fl= eefl->states[0].contact_positions[0].z;
@@ -325,10 +328,11 @@ void ROS_SUB::eefr_cb(gazebo_msgs::ContactsStateConstPtr eefr){
 			0, 1, 0,
 			- sin(_rfrp), 0, cos(_rfrp);
 
-	eef_fr_wc = rot_roll * rot_pitch * rot_knee * eef_fr;
-
-	
-
+	eef_fr_wc = rot_world_virtual_base * rot_roll * rot_pitch * rot_knee * eef_fr;
+/*
+	cout<<"forza fr nel sistema di riferimento world:"<<endl;
+	cout<<eef_fr_wc <<endl;
+*/
 	x_c.fr= eefr->states[0].contact_positions[0].x;
 	y_c.fr= eefr->states[0].contact_positions[0].y;
 	z_c.fr= eefr->states[0].contact_positions[0].z;
@@ -390,18 +394,23 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 
 	xc_vb_ll = (x_c.br + x_c.fl)/2;
 	yc_vb_ll = (y_c.br + y_c.fl)/2;
-
+/*
 	cout<<"coordinata x del piede destro del virtual biped: "<<xc_vb_rl<<endl;
-	cout<<"coordinata y del piede destro del virtual biped: "<<xc_vb_rl<<endl;
+	cout<<"coordinata y del piede destro del virtual biped: "<<yc_vb_rl<<endl;
 	cout<<"coordinata x del piede sinistro del virtual biped: "<<xc_vb_ll<<endl;
-	cout<<"coordinata y del piede sinistro del virtual biped: "<<xc_vb_ll<<endl;
+	cout<<"coordinata y del piede sinistro del virtual biped: "<<yc_vb_ll<<endl;
+	*/
 //Calcolo componente z della forza 
 	eef_vb_rlz =_ee_f_vb_rl.transpose() * sele_z;
 	eef_vb_llz =_ee_f_vb_ll.transpose() * sele_z;
 
 	cop_x = (eef_vb_rlz * xc_vb_rl + eef_vb_llz * xc_vb_ll)/(eef_vb_rlz+ eef_vb_llz);
 	cop_y = (eef_vb_rlz * yc_vb_rl + eef_vb_llz * yc_vb_ll)/(eef_vb_rlz+ eef_vb_llz);
-	
+/*
+	cout<<"copx: "<<cop_x<<endl;
+	cout<<"copy: "<<cop_y<<endl;
+*/
+
     }
 
 }
@@ -417,8 +426,10 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	tf::Quaternion q(pt->pose[1].orientation.x, pt->pose[1].orientation.y, pt->pose[1].orientation.z, pt->pose[1].orientation.w);
 	double roll, pitch, yaw;
 	tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-	//TO DO: AGGIUNGI QUESTA ROTAZIONE AI VETTORI _WC
-	//rot_world_virtual_base << cos(yaw)*cos(pitch), cos()sin()sin(), ...
+
+	rot_world_virtual_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll),
+							sin(yaw)*cos(pitch), sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll), sin(yaw)*sin(pitch)*cos(roll)-cos(yaw)*sin(roll),
+							-sin(pitch), cos(pitch)*sin(roll), cos(pitch)*cos(roll);
 
 	x_f_base = pt->pose[1].position.x;
 	y_f_base = pt->pose[1].position.y;
