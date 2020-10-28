@@ -374,19 +374,7 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
         _hip_j_brfl = ( hp.br + hp.fl )/2;
         _hip_eff_brfl = he.br + he.fl;
 		_ee_f_vb_ll = 2 * eef_br_wc; 
-	/*
-		//float y;
-		//float x;
-		
-		float m;
-		float q;
-
-		m = ( y_c.fr - y_c.bl ) / ( x_c.fr-x_c.bl ); // (y2-y1)/(x2-x1)
-		q = - x_c.bl * m + y_c.bl;//-x1*m +y1
-
-
-		//y=m*x+q;
-	*/
+	
 //calcolo posizioni dei piedi del virtual biped
 
 	xc_vb_rl = (x_c.bl + x_c.fr)/2;
@@ -410,6 +398,50 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 	cout<<"copx: "<<cop_x<<endl;
 	cout<<"copy: "<<cop_y<<endl;
 */
+
+
+		// Calcolo vertici del poligono di supporto
+		
+		float m;
+		float q;
+		float q_newp;
+		float q_newn;
+		float m_pep;
+		float qr;
+		float qs;
+		float xa,ya,xb,yb,xc,yc,xd,yd;
+
+		m = ( yc_vb_rl - yc_vb_ll ) / ( xc_vb_rl - xc_vb_ll ); // (y2-y1)/(x2-x1)
+		q = - xc_vb_ll * m + yc_vb_ll;//-x1*m +y1
+
+		q_newp = q + 0.01;
+		q_newn = q - 0.01;
+		m_pep = -1/m; //m perpendicolare
+		qr = yc_vb_ll - m_pep * xc_vb_ll;
+		qs = yc_vb_rl - m_pep * xc_vb_rl;
+
+		xa=(qr-q_newp)/((pow(m,2)+1)/m);
+		ya=-(qr - q_newp)/(pow(m,2)+1)+ qr;
+
+		xb=(qs-q_newp)/((pow(m,2)+1)/m);
+		yb=-(qs - q_newp)/(pow(m,2)+1)+ qs;
+
+		xc=(qs-q_newn)/((pow(m,2)+1)/m);
+		yc=-(qs - q_newn)/(pow(m,2)+1)+ qs;
+
+		xd=(qr-q_newn)/((pow(m,2)+1)/m);
+		yd=-(qr - q_newn)/(pow(m,2)+1)+ qr;
+
+		cout<<"A: "<<xa<<","<<ya<<endl;
+		cout<<"B: "<<xb<<","<<yb<<endl;
+		cout<<"C: "<<xc<<","<<yc<<endl;
+		cout<<"D: "<<xd<<","<<yd<<endl;
+
+		cout<<"copx: "<<cop_x<<endl;
+		cout<<"copy: "<<cop_y<<endl;
+
+		
+	
 
     }
 
