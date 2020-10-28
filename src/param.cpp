@@ -6,6 +6,8 @@
 #include "gazebo_msgs/ContactsState.h"
 #include "gazebo_msgs/ModelStates.h"
 #include "geometry_msgs/Vector3.h"
+#include "geometry_msgs/PointStamped.h"
+#include "geometry_msgs/TwistStamped.h"
 #include <math.h>
 #include <tesi/seleziona_gamba.h>
 #include "boost/thread.hpp"
@@ -30,6 +32,8 @@ class ROS_SUB {
 		void eefr_cb(gazebo_msgs::ContactsStateConstPtr);
 		void len_leg_cb(tesi::seleziona_gamba);
 		void modelState_cb(gazebo_msgs::ModelStatesConstPtr);
+		void Com_cb(geometry_msgs::PointStampedConstPtr);
+		void VCom_cb(geometry_msgs::TwistStampedConstPtr);
 		void run();
 		void Calculate_poligono_sup();
 		
@@ -43,6 +47,9 @@ class ROS_SUB {
 		ros::Subscriber _eefr_sub;
 		ros::Subscriber _len_leg_sub;
 		ros::Subscriber _modelState_sub;
+		ros::Subscriber _com_sub;
+		ros::Subscriber _vcom_sub;
+
 
 		ros::Publisher _eef_pub;
 		ros::Publisher _hp_pub;
@@ -108,7 +115,11 @@ class ROS_SUB {
 		float eef_vb_rlz;
 		float eef_vb_llz;
 
+		float x_com;
+		float y_com;
+		float z_com;
 
+		float vcom;
 
 
 		
@@ -128,6 +139,9 @@ ROS_SUB::ROS_SUB() {
 	_eefr_sub = _nh.subscribe("/dogbot/front_right_contactsensor_state",10,&ROS_SUB::eefr_cb,this);
 	_len_leg_sub = _nh.subscribe("/data/len_leg",10,&ROS_SUB::len_leg_cb,this);
 	_modelState_sub = _nh.subscribe("/gazebo/model_states", 10, &ROS_SUB::modelState_cb, this);
+	_com_sub = _nh.subscribe("/dogbot/cog",10, &ROS_SUB::Com_cb,this);
+	_vcom_sub = _nh.subscribe("/dogbot/v_cog",10, &ROS_SUB::VCom_cb,this);
+
 
 	_eef_pub = _nh.advertise<tesi::seleziona_gamba>("/data/eef",10);
 	_hp_pub = _nh.advertise<tesi::seleziona_gamba>("/data/hip/joint",10);
@@ -171,6 +185,20 @@ void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 	
 	
 }
+
+
+void ROS_SUB::Com_cb(geometry_msgs::PointStampedConstPtr pos){
+	
+	x_com = pos->point.x;
+	y_com = pos->point.y;
+	z_com = pos->point.z;
+}
+
+void ROS_SUB::VCom_cb(geometry_msgs::TwistStampedConstPtr data){
+	float lin_vel_com;
+	lin_vel_com = data->twist.linear.x;
+}
+
 
 void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 	
