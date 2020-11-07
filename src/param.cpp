@@ -16,6 +16,7 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/SVD"
 #include <tf/tf.h>
+//#include "inert.cpp"
 
 using namespace Eigen;
 using namespace std;
@@ -120,6 +121,8 @@ class ROS_SUB {
 		float z_com;
 
 		float vcom;
+
+		VectorXd q_joint;
 
 
 		
@@ -486,7 +489,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	tf::Quaternion q(pt->pose[1].orientation.x, pt->pose[1].orientation.y, pt->pose[1].orientation.z, pt->pose[1].orientation.w);
 	double roll, pitch, yaw;
 	tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-
+//nel caso in cui avessi bisogno degli angoli di eulero getYPR (zyx) la rotazione yxz
 	rot_world_virtual_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll),
 							sin(yaw)*cos(pitch), sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll), sin(yaw)*sin(pitch)*cos(roll)-cos(yaw)*sin(roll),
 							-sin(pitch), cos(pitch)*sin(roll), cos(pitch)*cos(roll);
@@ -509,7 +512,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	cout<<"pitch: "<<pitch<<endl;
 	cout<<"yaw: "<<yaw<<endl;
 	*/
-
+	q_joint<<x_f_base,y_f_base,z_f_base,4,5,6,_rblp, hp.bl, _kblp ,_rbrp,hp.br, _kbrp,_rflp, hp.fl, _kflp, _rfrp, hp.fr, _kfrp;
 }
 
 
