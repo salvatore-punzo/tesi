@@ -485,6 +485,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	// accedere alla posizione e all'orientamento diel ground_plane (0), del dogbot(1), del plannar_mover(2)
 	cout<<a<<endl;
 	*/
+//IMPORTANTE VEDI SE CAMBIARE L'ACCESSO AL VETTORE DA POSE[1] A POSE[2]
 
 	tf::Quaternion q(pt->pose[1].orientation.x, pt->pose[1].orientation.y, pt->pose[1].orientation.z, pt->pose[1].orientation.w);
 	double roll, pitch, yaw;
