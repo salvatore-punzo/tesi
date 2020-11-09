@@ -16,7 +16,7 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/SVD"
 #include <tf/tf.h>
-//#include "inert.cpp"
+#include "inert.cpp"
 
 using namespace Eigen;
 using namespace std;
@@ -35,6 +35,7 @@ class ROS_SUB {
 		void modelState_cb(gazebo_msgs::ModelStatesConstPtr);
 		void Com_cb(geometry_msgs::PointStampedConstPtr);
 		void VCom_cb(geometry_msgs::TwistStampedConstPtr);
+		void vbody_cb(geometry_msgs::TwistStampedConstPtr);
 		void run();
 		void Calculate_poligono_sup();
 		
@@ -50,6 +51,7 @@ class ROS_SUB {
 		ros::Subscriber _modelState_sub;
 		ros::Subscriber _com_sub;
 		ros::Subscriber _vcom_sub;
+		ros::Subscriber _vbody_sub;
 
 
 		ros::Publisher _eef_pub;
@@ -67,6 +69,15 @@ class ROS_SUB {
 		float yc_vb_rl;
 		float xc_vb_ll;
 		float yc_vb_ll;
+
+		float _hblp;
+		float _hbrp;
+		float _hflp;
+		float _hfrp;
+
+		float _yaw_eu;
+		float _pitch_eu;
+		float _roll_eu;
 
 		float _kblp;
 		float _kbrp;
@@ -122,7 +133,25 @@ class ROS_SUB {
 
 		float vcom;
 
-		VectorXd q_joint;
+		//MatrixXd q_joints;
+
+		Vector3d vl_floating_base;
+		Vector3d va_floating_base;
+
+		float _hblv;
+		float _hbrv;
+		float _hflv;
+		float _hfrv;
+
+		float _kblv;
+		float _kbrv;
+		float _kflv;
+		float _kfrv;
+
+		float _rblv;
+		float _rbrv;
+		float _rflv;
+		float _rfrv;
 
 
 		
@@ -144,6 +173,7 @@ ROS_SUB::ROS_SUB() {
 	_modelState_sub = _nh.subscribe("/gazebo/model_states", 10, &ROS_SUB::modelState_cb, this);
 	_com_sub = _nh.subscribe("/dogbot/cog",10, &ROS_SUB::Com_cb,this);
 	_vcom_sub = _nh.subscribe("/dogbot/v_cog",10, &ROS_SUB::VCom_cb,this);
+	_vbody_sub = _nh.subscribe("/dogbot/v_body",10,&ROS_SUB::vbody_cb,this);
 
 
 	_eef_pub = _nh.advertise<tesi::seleziona_gamba>("/data/eef",10);
@@ -180,6 +210,20 @@ void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 	_rflp = js->position[8];
 	_rfrp = js->position[11];
 
+	_hblv = js->velocity[1];
+	_hbrv = js->velocity[4];
+	_hflv = js->velocity[7];
+	_hfrv = js->velocity[10];
+
+	_kblv = js->velocity[0];
+	_kbrv = js->velocity[3];
+	_kflv = js->velocity[6];
+	_kfrv = js->velocity[9];
+
+	_rblv = js->velocity[2];
+	_rbrv = js->velocity[5];
+	_rflv = js->velocity[8];
+	_rfrv = js->velocity[11];
 
 	
 
@@ -385,7 +429,16 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
     
 }
 
- void ROS_SUB::Calculate_poligono_sup(){
+void ROS_SUB::vbody_cb(geometry_msgs::TwistStampedConstPtr vj){
+
+	vl_floating_base << vj->twist.linear.x, vj->twist.linear.y, vj->twist.linear.z;
+	va_floating_base << vj->twist.angular.x, vj->twist.angular.y, vj->twist.angular.z;
+	cout<<"velocità floating base lungo x"<<vl_floating_base[0]<<endl;
+
+
+}
+
+void ROS_SUB::Calculate_poligono_sup(){
 
     while(ros::ok()){
 		Vector3d sele_z(0,0,1);
@@ -462,7 +515,7 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 
 		xd=(qr-q_newn)/((pow(m,2)+1)/m);
 		yd=-(qr - q_newn)/(pow(m,2)+1)+ qr;
-
+/* test
 		cout<<"A: "<<xa<<","<<ya<<endl;
 		cout<<"B: "<<xb<<","<<yb<<endl;
 		cout<<"C: "<<xc<<","<<yc<<endl;
@@ -471,7 +524,7 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 		cout<<"copx: "<<cop_x<<endl;
 		cout<<"copy: "<<cop_y<<endl;
 
-		
+		*/
 	
 
     }
@@ -479,30 +532,44 @@ void ROS_SUB::len_leg_cb(tesi::seleziona_gamba ll){
 }
 
 void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
+	double yaw_eu, pitch_eu, roll_eu;
+
+	_yaw_eu = (float) yaw_eu;
+	_pitch_eu = (float) pitch_eu;
+	_roll_eu = (float) roll_eu;
+
+	_hfrp = hp.fr;
+	_hflp = hp.fl;
+	_hbrp = hp.br;
+	_hblp = hp.bl;
+	
 	/*			prova
 	float a;
 	a= pt->pose[1].orientation.x;  //pose è un vettore di cardinalità 3 che mi permette di
-	// accedere alla posizione e all'orientamento diel ground_plane (0), del dogbot(1), del plannar_mover(2)
+	// accedere alla posizione e all'orientamento diel ground_plane (0), del dogbot(2), del plannar_mover(1)
 	cout<<a<<endl;
 	*/
-//IMPORTANTE VEDI SE CAMBIARE L'ACCESSO AL VETTORE DA POSE[1] A POSE[2]
 
-	tf::Quaternion q(pt->pose[1].orientation.x, pt->pose[1].orientation.y, pt->pose[1].orientation.z, pt->pose[1].orientation.w);
+
+	tf::Quaternion q(pt->pose[2].orientation.x, pt->pose[2].orientation.y, pt->pose[2].orientation.z, pt->pose[2].orientation.w);
 	double roll, pitch, yaw;
 	tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-//nel caso in cui avessi bisogno degli angoli di eulero getYPR (zyx) la rotazione yxz
+
+	tf::Matrix3x3(q).getEulerYPR(yaw_eu,pitch_eu,roll_eu);
+
+
 	rot_world_virtual_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll),
 							sin(yaw)*cos(pitch), sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll), sin(yaw)*sin(pitch)*cos(roll)-cos(yaw)*sin(roll),
 							-sin(pitch), cos(pitch)*sin(roll), cos(pitch)*cos(roll);
 
-	x_f_base = pt->pose[1].position.x;
-	y_f_base = pt->pose[1].position.y;
-	z_f_base = pt->pose[1].position.z;
-
-	coo_f_base[0] = pt->pose[1].position.x;
-	coo_f_base[1] = pt->pose[1].position.y;
-	coo_f_base[2] = pt->pose[1].position.z;
-
+	x_f_base = pt->pose[2].position.x;
+	y_f_base = pt->pose[2].position.y;
+	z_f_base = pt->pose[2].position.z;
+/*
+	coo_f_base[0] = pt->pose[2].position.x;
+	coo_f_base[1] = pt->pose[2].position.y;
+	coo_f_base[2] = pt->pose[2].position.z;
+*/
 /*  test
 	cout<<"coordinate floating base:"<<endl;
 	cout<<"x: "<<coo_f_base[0]<<endl;
@@ -513,7 +580,20 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	cout<<"pitch: "<<pitch<<endl;
 	cout<<"yaw: "<<yaw<<endl;
 	*/
-	q_joint<<x_f_base,y_f_base,z_f_base,4,5,6,_rblp, hp.bl, _kblp ,_rbrp,hp.br, _kbrp,_rflp, hp.fl, _kflp, _rfrp, hp.fr, _kfrp;
+
+	//VectorXd q_joints( (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp);
+	
+	MatrixXd q_joints(18,1);
+
+	//q_joints(18,1);
+	//q_joints << (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp;
+	//INERT M (q_joints);
+
+	//cout<<"Matrice di Inerzia:"<<endl;
+	//cout<<M.A0<<endl;
+	
+	//q_joints(18,1);
+	q_joints <<  x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu,  _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
 }
 
 
