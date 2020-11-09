@@ -532,6 +532,7 @@ void ROS_SUB::Calculate_poligono_sup(){
 }
 
 void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
+	
 	double yaw_eu, pitch_eu, roll_eu;
 
 	_yaw_eu = (float) yaw_eu;
@@ -584,6 +585,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	//VectorXd q_joints( (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp);
 	
 	MatrixXd q_joints(18,1);
+	MatrixXd dq_joints(18,1);
+	ArrayXf vectorZero = ArrayXf::Zero(18);
 
 	//q_joints(18,1);
 	//q_joints << (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp;
@@ -594,6 +597,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	
 	//q_joints(18,1);
 	q_joints <<  x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu,  _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
+	dq_joints << vl_floating_base[0], vl_floating_base[1], vl_floating_base[2], va_floating_base[0], va_floating_base[1], va_floating_base[2], _rblv, _hblv, _kblv, _rbrv, _hbrv, _kbrv, _rflv, _hfrv, _kflv, _rfrv, _hfrv, _kfrv;
+	
 }
 
 
