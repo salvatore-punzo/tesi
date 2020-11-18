@@ -1,5 +1,17 @@
 {
     "files.associations": {
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "*.tcc": "cpp",
+        "vector": "cpp",
+        "functional": "cpp",
+        "random": "cpp",
+        "system_error": "cpp",
+        "bitset": "cpp",
+        "memory": "cpp",
+        "string_view": "cpp",
+        "optional": "cpp",
+        "thread": "cpp",
+        "type_traits": "cpp",
+        "typeindex": "cpp"
     }
 }

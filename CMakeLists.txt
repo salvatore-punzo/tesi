@@ -21,8 +21,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
-include_directories(${Eigen_INCLUDE_DIRS})
 
+find_package(iDynTree REQUIRED)
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -127,10 +127,15 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+ include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
+ add_library(${PROJECT_NAME}
+#   src/${PROJECT_NAME}/dogbot_model.cpp
+src/quadruped.cpp
 
+)
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/tesi.cpp
@@ -144,7 +149,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
- add_executable(param src/param.cpp)
+ add_executable(param src/param.cpp src/quadruped.cpp)
 add_executable(cin_dir src/cin_dir.cpp)
  add_executable(virtual_leg src/virtual_leg.cpp)
 ## Rename C++ executable without prefix
@@ -158,7 +163,7 @@ add_executable(cin_dir src/cin_dir.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(param  ${catkin_LIBRARIES})
+ target_link_libraries(param  ${catkin_LIBRARIES} ${iDynTree_LIBRARIES})
  target_link_libraries(cin_dir  ${catkin_LIBRARIES})
   target_link_libraries(virtual_leg  ${catkin_LIBRARIES})
 

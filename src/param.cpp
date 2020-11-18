@@ -16,7 +16,16 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/SVD"
 #include <tf/tf.h>
-#include "inert.cpp"
+#include "tesi/quadruped.h"
+
+//#include "inert.cpp"
+//#include "grav.cpp"
+//#include "jac_com.cpp"
+//#include "jac_j.cpp"
+//#include "jac_d.cpp"
+#include "tesi/optimization.h"
+#include "tesi/stdafx.h"
+
 
 using namespace Eigen;
 using namespace std;
@@ -153,9 +162,11 @@ class ROS_SUB {
 		float _rflv;
 		float _rfrv;
 
+		Matrix<double,6,1> basevel;
+
+		QUADRUPED *doggo;
 
 		
-	
 		
 		
 };
@@ -179,6 +190,11 @@ ROS_SUB::ROS_SUB() {
 	_eef_pub = _nh.advertise<tesi::seleziona_gamba>("/data/eef",10);
 	_hp_pub = _nh.advertise<tesi::seleziona_gamba>("/data/hip/joint",10);
 	_he_pub = _nh.advertise<tesi::seleziona_gamba>("/data/hip/effort",10);
+
+	string modelFile="/home/salvatore/ros_ws/src/DogBotV4/ROS/src/dogbot_description/urdf/dogbot.urdf";
+
+	doggo = new QUADRUPED(modelFile);
+	
 	
 }
 
@@ -224,6 +240,8 @@ void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 	_rbrv = js->velocity[5];
 	_rflv = js->velocity[8];
 	_rfrv = js->velocity[11];
+
+	
 
 	
 
@@ -433,8 +451,8 @@ void ROS_SUB::vbody_cb(geometry_msgs::TwistStampedConstPtr vj){
 
 	vl_floating_base << vj->twist.linear.x, vj->twist.linear.y, vj->twist.linear.z;
 	va_floating_base << vj->twist.angular.x, vj->twist.angular.y, vj->twist.angular.z;
-	cout<<"velocità floating base lungo x"<<vl_floating_base[0]<<endl;
-
+	//cout<<"velocità floating base lungo x"<<vl_floating_base[0]<<endl;
+	basevel << vj->twist.linear.x, vj->twist.linear.y, vj->twist.linear.z, vj->twist.angular.x, vj->twist.angular.y, vj->twist.angular.z;
 
 }
 
@@ -584,21 +602,82 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 
 	//VectorXd q_joints( (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp);
 	
-	MatrixXd q_joints(18,1);
-	MatrixXd dq_joints(18,1);
-	ArrayXf vectorZero = ArrayXf::Zero(18);
+	MatrixXd q_joints(12,1);
+	MatrixXd dq_joints(12,1);
+	ArrayXd vectorZero = ArrayXd::Zero(18);
+	MatrixXd q_joints_com(6,1);
+	MatrixXd q_joints_j(12,1);
+	MatrixXd zeros = MatrixXd::Zero(6,12);
+	MatrixXd eye = MatrixXd::Identity(12,12);
+	MatrixXd S(18,12);
+	MatrixXd S_T(12,18);
+	Matrix4d world_H_base;
 
-	//q_joints(18,1);
-	//q_joints << (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp;
-	//INERT M (q_joints);
+	// la matrice di rotazione  quella ricavata con gli angoli roll, pitch ,yaw
+	world_H_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll), x_f_base,
+					sin(yaw)*cos(pitch), sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll), sin(yaw)*sin(pitch)*cos(roll)-cos(yaw)*sin(roll), y_f_base,
+					-sin(pitch), cos(pitch)*sin(roll), cos(pitch)*cos(roll), z_f_base,
+					0, 0, 0, 1;
 
-	//cout<<"Matrice di Inerzia:"<<endl;
-	//cout<<M.A0<<endl;
+
+
 	
-	//q_joints(18,1);
+	S << zeros, eye;
+	S_T = S.transpose();
+	
+
+	/* verifica delle matrici
+	cout<<"Matrice S:"<<endl;
+	cout<<S<<endl;
+	
+	cout<<"Matrice S transposta:"<<endl;
+	cout<<S_T<<endl;
+	*/
+
+/*  la seguente definizione dei vettori non è piú corretta perchè è fatta per i file che calvolavano i termini dinamici in modo simmbolico
 	q_joints <<  x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu,  _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
 	dq_joints << vl_floating_base[0], vl_floating_base[1], vl_floating_base[2], va_floating_base[0], va_floating_base[1], va_floating_base[2], _rblv, _hblv, _kblv, _rbrv, _hbrv, _kbrv, _rflv, _hfrv, _kflv, _rfrv, _hfrv, _kfrv;
+	q_joints_com << x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu;
+	q_joints_j << _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
+*/	
+	q_joints << _rfrp, _rflp, _rblp, _rbrp, _hbrp,  _kbrp, _hblp,  _kblp , _hflp, _kflp, _hfrp,  _kfrp;
+	dq_joints << _rfrv, _rflv, _rblv, _rbrv, _hbrv,  _kbrv, _hblv,  _kblv , _hflv, _kflv, _hfrv,  _kfrv;
+	Vector3d gravity1(0,0, -9.81);
 	
+	doggo->update(world_H_base, q_joints, dq_joints, basevel, gravity1);
+	VectorXd b=doggo->getCoriolisMatrix();
+	MatrixXd M=doggo->getMassMatrix();
+	cout<<"coriolis: "<<endl;
+	cout<<b<<endl;
+
+	cout<<"Matrice di inerzia"<<endl;
+	cout<<M<<endl;
+	//INERT M (q_joints); //M.A0
+	//GRAV b (q_joints, dq_joints,  vectorZero,  vectorZero,  vectorZero); // b.G
+	
+	/*	concatenare matrici con eigen
+		MatrixXd D(A.rows()+B.rows(), A.cols()); 
+		D << A, B; 
+	*/
+/*
+	JACCOM Jc_c (q_joints);
+	JACJ Jc_j (q_joints);
+
+	
+
+	MatrixXd Jc(12, 18);
+	Jc << Jc_c.A0, Jc_j.J0;
+	cout<<"Matrice Jc:" <<endl;
+	cout<<Jc<<endl;
+
+	cout<<"Matrice Jc_c:" <<endl;
+	cout<<Jc_c.A0<<endl;
+	cout<<"Matrice Jc_j:" <<endl;
+	cout<<Jc_j.J0<<endl;
+	*/
+//definisci i vettori q e dq secondo il nuovo ordine
+
+
 }
 
 
