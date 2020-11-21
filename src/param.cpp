@@ -608,10 +608,14 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	MatrixXd q_joints_com(6,1);
 	MatrixXd q_joints_j(12,1);
 	MatrixXd zeros = MatrixXd::Zero(6,12);
+
 	MatrixXd eye = MatrixXd::Identity(12,12);
+	
+
 	MatrixXd S(18,12);
 	MatrixXd S_T(12,18);
 	Matrix4d world_H_base;
+	MatrixXd B(24,18);
 
 	// la matrice di rotazione  quella ricavata con gli angoli roll, pitch ,yaw
 	world_H_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll), x_f_base,
@@ -645,13 +649,20 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	Vector3d gravity1(0,0, -9.81);
 	
 	doggo->update(world_H_base, q_joints, dq_joints, basevel, gravity1);
-	VectorXd b=doggo->getCoriolisMatrix();
+	VectorXd b=doggo->getBiasMatrix();
 	MatrixXd M=doggo->getMassMatrix();
+	MatrixXd Jc=doggo->getJacobian();
+	MatrixXd Jcdqd=doggo->getBiasAcc();
+	/*
 	cout<<"coriolis: "<<endl;
 	cout<<b<<endl;
 
 	cout<<"Matrice di inerzia"<<endl;
 	cout<<M<<endl;
+	*/
+	cout<<"Jacobian: "<<endl;
+	cout<<Jc<<endl;
+
 	//INERT M (q_joints); //M.A0
 	//GRAV b (q_joints, dq_joints,  vectorZero,  vectorZero,  vectorZero); // b.G
 	
