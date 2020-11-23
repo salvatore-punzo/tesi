@@ -30,8 +30,8 @@ http://www.fsf.org/licensing/licenses
 #define _GNU_SOURCE
 #endif
 
-#include "stdafx.h"
-#include "ap.h"
+#include "tesi/stdafx.h"
+#include "tesi/ap.h"
 #include <limits>
 #include <locale.h>
 #include <ctype.h>

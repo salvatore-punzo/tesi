@@ -18,17 +18,22 @@
 #include <tf/tf.h>
 #include "tesi/quadruped.h"
 
-//#include "inert.cpp"
-//#include "grav.cpp"
-//#include "jac_com.cpp"
-//#include "jac_j.cpp"
-//#include "jac_d.cpp"
 #include "tesi/optimization.h"
 #include "tesi/stdafx.h"
+#include "ap.cpp"
+#include "alglibinternal.cpp"
+#include "alglibmisc.cpp"
+#include "integration.cpp"
+#include "interpolation.cpp"
+#include "linalg.cpp"
+#include "optimization.cpp"
+#include "solvers.cpp"
+#include "specialfunctions.cpp"
 
 
 using namespace Eigen;
 using namespace std;
+using namespace alglib;
 
 class ROS_SUB {
 
@@ -605,17 +610,27 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	MatrixXd q_joints(12,1);
 	MatrixXd dq_joints(12,1);
 	ArrayXd vectorZero = ArrayXd::Zero(18);
-	MatrixXd q_joints_com(6,1);
-	MatrixXd q_joints_j(12,1);
+	//MatrixXd q_joints_com(6,1);
+	//MatrixXd q_joints_j(12,1);
 	MatrixXd zeros = MatrixXd::Zero(6,12);
-
 	MatrixXd eye = MatrixXd::Identity(12,12);
-	
 
-	MatrixXd S(18,12);
-	MatrixXd S_T(12,18);
+	Matrix<double,3,3> I = Matrix<double,3,3>::Identity(3,3);
+	Matrix<double,3,3> zero = Matrix<double,3,3>::Zero(3,3);
+	Matrix<double,18,12> S;
+	Matrix<double,12,18> S_T;
 	Matrix4d world_H_base;
-	MatrixXd B(24,18);
+	Matrix<double,24,12> B;
+
+	B<< I,zero,zero,zero,
+		zero,zero,zero,zero,
+		zero,I,zero,zero,
+		zero,zero,zero,zero,
+		zero,zero,I,zero,
+		zero,zero,zero,zero,
+		zero,zero,zero,I,
+		zero,zero,zero,zero;
+
 
 	// la matrice di rotazione  quella ricavata con gli angoli roll, pitch ,yaw
 	world_H_base << cos(yaw)*cos(pitch), cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll), cos(yaw)*sin(pitch)*cos(roll) + sin(yaw)*sin(roll), x_f_base,
@@ -638,55 +653,71 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	cout<<S_T<<endl;
 	*/
 
-/*  la seguente definizione dei vettori non è piú corretta perchè è fatta per i file che calvolavano i termini dinamici in modo simmbolico
-	q_joints <<  x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu,  _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
-	dq_joints << vl_floating_base[0], vl_floating_base[1], vl_floating_base[2], va_floating_base[0], va_floating_base[1], va_floating_base[2], _rblv, _hblv, _kblv, _rbrv, _hbrv, _kbrv, _rflv, _hfrv, _kflv, _rfrv, _hfrv, _kfrv;
-	q_joints_com << x_f_base,  y_f_base, z_f_base,  _roll_eu,  _pitch_eu,  _yaw_eu;
-	q_joints_j << _rblp,  _hblp,  _kblp ,  _rbrp,  _hbrp,  _kbrp, _rflp,  _hflp, _kflp,  _rfrp,  _hfrp,  _kfrp;
-*/	
+
 	q_joints << _rfrp, _rflp, _rblp, _rbrp, _hbrp,  _kbrp, _hblp,  _kblp , _hflp, _kflp, _hfrp,  _kfrp;
 	dq_joints << _rfrv, _rflv, _rblv, _rbrv, _hbrv,  _kbrv, _hblv,  _kblv , _hflv, _kflv, _hfrv,  _kfrv;
 	Vector3d gravity1(0,0, -9.81);
 	
 	doggo->update(world_H_base, q_joints, dq_joints, basevel, gravity1);
-	VectorXd b=doggo->getBiasMatrix();
-	MatrixXd M=doggo->getMassMatrix();
-	MatrixXd Jc=doggo->getJacobian();
-	MatrixXd Jcdqd=doggo->getBiasAcc();
-	/*
+	VectorXd bb=doggo->getBiasMatrix();
+	Matrix<double,18,18> MM=doggo->getMassMatrix();
+	Matrix<double,24,18> Jc=doggo->getJacobian();
+	Matrix<double,24,1> Jcdqd=doggo->getBiasAcc();
+	Matrix<double,18,1> b_coriol;
+	Matrix<double,18,12> Jc_T_B;
+	Matrix<double,12,18> B_T_Jc;
+
+	Jc_T_B = Jc.transpose() * B;
+	B_T_Jc = B.transpose() * Jc;
+
+
+
+	for(int i = 0; i<18; i++){
+		b_coriol(i,0)=bb(i);
+	}
+	//vincoli del problema quadratico 
+	real_2d_array b;
+	b.setlength(18,1);
+	b.setcontent(18,1, &bb(0));
+
+	real_2d_array M;
+	M.setlength(18,18);
+	M.setcontent(18,18, &M(0,0));
+
+	real_2d_array S_t;
+	S_t.setlength(12,18);
+	S_t.setcontent(12,18, &S_T(0,0));
+
+	real_2d_array JcT_B;
+	JcT_B.setlength(18,12);
+	JcT_B.setcontent(18,12, &Jc_T_B(0,0));
+
+	real_2d_array BT_Jc;
+	BT_Jc.setlength(12,18);
+	BT_Jc.setcontent(12,18, &B_T_Jc(0,0));
+
+//VEDI SE PUÒ ESSERE UTILE USARE LA FUNZIONE ATTACH
+
+
+	//parametro che imposta il vincolo di uguaglianza
+	integer_1d_array ct = "[0]";
+
+/*
 	cout<<"coriolis: "<<endl;
 	cout<<b<<endl;
 
 	cout<<"Matrice di inerzia"<<endl;
 	cout<<M<<endl;
-	*/
+	
 	cout<<"Jacobian: "<<endl;
-	cout<<Jc<<endl;
-
-	//INERT M (q_joints); //M.A0
-	//GRAV b (q_joints, dq_joints,  vectorZero,  vectorZero,  vectorZero); // b.G
+	cout<<Jcdqd<<endl;
+	*/
 	
 	/*	concatenare matrici con eigen
 		MatrixXd D(A.rows()+B.rows(), A.cols()); 
 		D << A, B; 
 	*/
-/*
-	JACCOM Jc_c (q_joints);
-	JACJ Jc_j (q_joints);
 
-	
-
-	MatrixXd Jc(12, 18);
-	Jc << Jc_c.A0, Jc_j.J0;
-	cout<<"Matrice Jc:" <<endl;
-	cout<<Jc<<endl;
-
-	cout<<"Matrice Jc_c:" <<endl;
-	cout<<Jc_c.A0<<endl;
-	cout<<"Matrice Jc_j:" <<endl;
-	cout<<Jc_j.J0<<endl;
-	*/
-//definisci i vettori q e dq secondo il nuovo ordine
 
 
 }
