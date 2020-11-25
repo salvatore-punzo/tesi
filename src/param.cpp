@@ -610,15 +610,17 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	MatrixXd q_joints(12,1);
 	MatrixXd dq_joints(12,1);
 	ArrayXd vectorZero = ArrayXd::Zero(18);
-	//MatrixXd q_joints_com(6,1);
+	Matrix<double,6,1> q_joints_base;
+	q_joints_base<<x_f_base, y_f_base, z_f_base, _roll_eu, _pitch_eu, _yaw_eu;
 	//MatrixXd q_joints_j(12,1);
-	MatrixXd zeros = MatrixXd::Zero(6,12);
+	MatrixXd zeros = MatrixXd::Zero(12,6);
 	MatrixXd eye = MatrixXd::Identity(12,12);
 
 	Matrix<double,3,3> I = Matrix<double,3,3>::Identity(3,3);
 	Matrix<double,3,3> zero = Matrix<double,3,3>::Zero(3,3);
-	Matrix<double,18,12> S;
-	Matrix<double,12,18> S_T;
+
+	Matrix<double,12,18> S;
+	Matrix<double,18,12> S_T;
 	Matrix4d world_H_base;
 	Matrix<double,24,12> B;
 
@@ -659,45 +661,47 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	Vector3d gravity1(0,0, -9.81);
 	
 	doggo->update(world_H_base, q_joints, dq_joints, basevel, gravity1);
-	VectorXd bb=doggo->getBiasMatrix();
-	Matrix<double,18,18> MM=doggo->getMassMatrix();
+	VectorXd b=doggo->getBiasMatrix();
+	Matrix<double,18,18> M=doggo->getMassMatrix();
 	Matrix<double,24,18> Jc=doggo->getJacobian();
 	Matrix<double,24,1> Jcdqd=doggo->getBiasAcc();
 	Matrix<double,18,1> b_coriol;
 	Matrix<double,18,12> Jc_T_B;
 	Matrix<double,12,18> B_T_Jc;
+	Matrix<double, 18,1> q_joints_total;
+	Matrix<double, 18,1> dq_joints_total;
+	Matrix<double,4,12> Sn;
+	Sn<<0,0,1,Matrix<double,1,15>::Zero(),
+		Matrix<double,1,5>::Zero(),1,Matrix<double,1,12>::Zero(),
+		Matrix<double,1,8>::Zero(),1,Matrix<double,1,9>::Zero(),
+		Matrix<double,1,11>::Zero(),1,Matrix<double,1,6>::Zero();
+
+	q_joints_total<<q_joints_base, q_joints;
+	
 
 	Jc_T_B = Jc.transpose() * B;
 	B_T_Jc = B.transpose() * Jc;
 
 
 
-	for(int i = 0; i<18; i++){
-		b_coriol(i,0)=bb(i);
-	}
+	
 	//vincoli del problema quadratico 
-	real_2d_array b;
-	b.setlength(18,1);
-	b.setcontent(18,1, &bb(0));
 
-	real_2d_array M;
-	M.setlength(18,18);
-	M.setcontent(18,18, &M(0,0));
 
-	real_2d_array S_t;
-	S_t.setlength(12,18);
-	S_t.setcontent(12,18, &S_T(0,0));
+	real_2d_array c; 
+	
+	
+	Matrix<double,18,43> A;
+	A<<M,Jc_T_B,S_T,Matrix<double,18,1>::Zero(),
+		B_T_Jc, Matrix<double,12,25>::Zero(),
+		Matrix<double,4,18>::Zero(), Sn, Matrix<double,4,13>::Zero();
 
-	real_2d_array JcT_B;
-	JcT_B.setlength(18,12);
-	JcT_B.setcontent(18,12, &Jc_T_B(0,0));
+	cout<<"A:"<<endl;
+	cout<<A<<endl;
+	//c.setlength(18,43);
 
-	real_2d_array BT_Jc;
-	BT_Jc.setlength(12,18);
-	BT_Jc.setcontent(12,18, &B_T_Jc(0,0));
-
-//VEDI SE PUÒ ESSERE UTILE USARE LA FUNZIONE ATTACH
-
+	
+	
 
 	//parametro che imposta il vincolo di uguaglianza
 	integer_1d_array ct = "[0]";
