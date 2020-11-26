@@ -749,8 +749,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 		Matrix<double,4,18>::Zero(), Sn, Matrix<double,4,13>::Zero(),Matrix<double,4,1>::Zero(),
 		Jt1_T, Matrix<double,3,24>::Zero(),Matrix<double,3,1>::Ones(), -Jt1_Tdot_dq -kd*e_dot - kp * e;
 
-	cout<<"A:"<<endl;
-	cout<<A<<endl;
+	//cout<<"A:"<<endl;
+	//cout<<A<<endl;
 	c.setlength(37,44);
 	c.setcontent(37,44, &A(0,0));
 
@@ -767,9 +767,12 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 		ct(i) = 1;
 	}
 
+	real_1d_array x;
 	minqpstate state;
     minqpreport rep;
-
+	 // NOTE: for convex problems you may try using minqpsetscaleautodiag()
+    //       which automatically determines variable scales.
+	minqpsetscale(state, s);
 	// create solver, set quadratic/linear terms
 	
     minqpcreate(43, state);
@@ -777,6 +780,12 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	//minqpsetlinearterm(state, l); non mi servono perchè di default sono già impostati a zero
     minqpsetlc(state, c, ct);
 	
+	minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0);
+    minqpoptimize(state);
+
+	minqpresults(state, x, rep);
+
+    printf("%s\n", x.tostring(1).c_str());
 
 /*
 	cout<<"coriolis: "<<endl;
