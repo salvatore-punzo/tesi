@@ -145,7 +145,9 @@ class ROS_SUB {
 		float y_com;
 		float z_com;
 
-		float vcom;
+		float xdcom;
+		float ydcom;
+		float zdcom;
 
 		//MatrixXd q_joints;
 
@@ -265,8 +267,11 @@ void ROS_SUB::Com_cb(geometry_msgs::PointStampedConstPtr pos){
 }
 
 void ROS_SUB::VCom_cb(geometry_msgs::TwistStampedConstPtr data){
-	float lin_vel_com;
-	lin_vel_com = data->twist.linear.x;
+	
+	xdcom = data->twist.linear.x;
+	ydcom = data->twist.linear.y;
+	zdcom = data->twist.linear.z;
+
 }
 
 
@@ -607,8 +612,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 
 	//VectorXd q_joints( (double) x_f_base, (double) y_f_base,(double) z_f_base, (double) _roll_eu, (double) _pitch_eu, (double) _yaw_eu, (double) _rblp, (double) _hblp, (double) _kblp , (double) _rbrp, (double) _hbrp, (double) _kbrp, (double) _rflp, (double) _hflp, (double) _kflp, (double) _rfrp, (double) _hfrp, (double) _kfrp);
 	
-	MatrixXd q_joints(12,1);
-	MatrixXd dq_joints(12,1);
+	VectorXd q_joints(12,1);
+	VectorXd dq_joints(12,1);
 	ArrayXd vectorZero = ArrayXd::Zero(18);
 	Matrix<double,6,1> q_joints_base;
 	q_joints_base<<x_f_base, y_f_base, z_f_base, _roll_eu, _pitch_eu, _yaw_eu;
@@ -665,18 +670,47 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	Matrix<double,18,18> M=doggo->getMassMatrix();
 	Matrix<double,24,18> Jc=doggo->getJacobian();
 	Matrix<double,24,1> Jcdqd=doggo->getBiasAcc();
-	Matrix<double,18,1> b_coriol;
+	Matrix<double,18,18> T=doggo->getTransMatrix();
+	Matrix<double,18,18> T_dot=doggo->getTdotMatrix();
 	Matrix<double,18,12> Jc_T_B;
 	Matrix<double,12,18> B_T_Jc;
 	Matrix<double, 18,1> q_joints_total;
 	Matrix<double, 18,1> dq_joints_total;
 	Matrix<double,4,12> Sn;
-	Sn<<0,0,1,Matrix<double,1,15>::Zero(),
-		Matrix<double,1,5>::Zero(),1,Matrix<double,1,12>::Zero(),
-		Matrix<double,1,8>::Zero(),1,Matrix<double,1,9>::Zero(),
-		Matrix<double,1,11>::Zero(),1,Matrix<double,1,6>::Zero();
+	Matrix<double,3,18> Jt1;
+	Matrix<double,3,18> Jt1_T;
+	Matrix<double,3,1> Jt1_Tdot_dq;
+	//Matrix<int,37,1> CT;
+	int CT[37];
+	Vector3d e;
+	Vector3d e_dot;
+	double kp=4;
+	double kd=sqrt(kp);
+	double com_zdes = 0.4;
+	e<<0,0,z_com-com_zdes;
+	e_dot<<0,0,zdcom;
+	/*
+	CT<<Matrix<int,30,1>::Zero(),
+		Matrix<int,7,1>::Ones();
+*/
+	
+
+	Jt1<<Matrix<double,1,18>::Zero(),
+		Matrix<double,1,18>::Zero(),
+		0,0,1,Matrix<double,1,15>::Zero();
+
+	Jt1_T<<Jt1 * T;
+
+	Jt1_Tdot_dq<<Jt1 * T_dot * dq_joints_total;
+
+
+	Sn<<0,0,1,Matrix<double,1,9>::Zero(),
+		Matrix<double,1,5>::Zero(),1,Matrix<double,1,6>::Zero(),
+		Matrix<double,1,8>::Zero(),1,Matrix<double,1,3>::Zero(),
+		Matrix<double,1,11>::Zero(),1;
 
 	q_joints_total<<q_joints_base, q_joints;
+	dq_joints_total<<vl_floating_base,va_floating_base,dq_joints;
 	
 
 	Jc_T_B = Jc.transpose() * B;
@@ -684,27 +718,65 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 
 
 
+	//imposto problema quadratico
+	Matrix<double,43,43> aa;
+	aa<<Matrix<double,43,43>::Zero();
+	aa(42,42)=1;
+	real_2d_array a;
+	a.setlength(43,43);
+	a.setcontent(43,43,&aa(0,0));
 	
+    real_1d_array l;
+	l.setlength(43);
+    real_1d_array s;
+	s.setlength(43);
+	for(int i = 0; i< 43; i++){
+		l(0)=0;
+		s(0)=1;
+	} 
+	
+
+
 	//vincoli del problema quadratico 
 
 
 	real_2d_array c; 
 	
 	
-	Matrix<double,18,43> A;
-	A<<M,Jc_T_B,S_T,Matrix<double,18,1>::Zero(),
-		B_T_Jc, Matrix<double,12,25>::Zero(),
-		Matrix<double,4,18>::Zero(), Sn, Matrix<double,4,13>::Zero();
+	Matrix<double,37,44> A;
+	A<<M,Jc_T_B,S_T,Matrix<double,18,1>::Zero(),-b,
+		B_T_Jc, Matrix<double,12,25>::Zero(),B.transpose()*Jcdqd,
+		Matrix<double,4,18>::Zero(), Sn, Matrix<double,4,13>::Zero(),Matrix<double,4,1>::Zero(),
+		Jt1_T, Matrix<double,3,24>::Zero(),Matrix<double,3,1>::Ones(), -Jt1_Tdot_dq -kd*e_dot - kp * e;
 
 	cout<<"A:"<<endl;
 	cout<<A<<endl;
-	//c.setlength(18,43);
+	c.setlength(37,44);
+	c.setcontent(37,44, &A(0,0));
 
 	
 	
 
 	//parametro che imposta il vincolo di uguaglianza
-	integer_1d_array ct = "[0]";
+	integer_1d_array ct;
+	ct.setlength(37);
+	for(int i = 0; i <30; i++){
+		ct(i) = 0;
+	}
+	for(int i = 31; i<37; i++){
+		ct(i) = 1;
+	}
+
+	minqpstate state;
+    minqpreport rep;
+
+	// create solver, set quadratic/linear terms
+	
+    minqpcreate(43, state);
+    minqpsetquadraticterm(state, a);
+	//minqpsetlinearterm(state, l); non mi servono perchè di default sono già impostati a zero
+    minqpsetlc(state, c, ct);
+	
 
 /*
 	cout<<"coriolis: "<<endl;
