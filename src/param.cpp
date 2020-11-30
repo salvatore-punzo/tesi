@@ -17,6 +17,7 @@
 #include "eigen3/Eigen/SVD"
 #include <tf/tf.h>
 #include "tesi/quadruped.h"
+#include <std_msgs/Float64MultiArray.h>
 
 #include "tesi/optimization.h"
 #include "tesi/stdafx.h"
@@ -71,6 +72,8 @@ class ROS_SUB {
 		ros::Publisher _eef_pub;
 		ros::Publisher _hp_pub;
 		ros::Publisher _he_pub;
+		ros::Publisher _tau_pub;
+
 
 		tesi::seleziona_gamba eef;
 		tesi::seleziona_gamba hp;
@@ -197,6 +200,7 @@ ROS_SUB::ROS_SUB() {
 	_eef_pub = _nh.advertise<tesi::seleziona_gamba>("/data/eef",10);
 	_hp_pub = _nh.advertise<tesi::seleziona_gamba>("/data/hip/joint",10);
 	_he_pub = _nh.advertise<tesi::seleziona_gamba>("/data/hip/effort",10);
+	_tau_pub = _nh.advertise<std_msgs::Float64MultiArray>("/dogbot/joint_position_controller/command",10);
 
 	string modelFile="/home/salvatore/ros_ws/src/DogBotV4/ROS/src/dogbot_description/urdf/dogbot.urdf";
 
@@ -767,6 +771,25 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 		ct(i) = 1;
 	}
 
+	//box constrain
+	real_1d_array bndl;
+	bndl.setlength(43);
+	real_1d_array bndu;
+	bndu.setlength(43);
+	for(int i = 0; i<30; i++){
+		bndl(i)= fp_neginf;//-INFINITY;
+		bndu(i)= fp_posinf;//+INFINITY;
+	}
+
+	for(int i=30; i<42; i++){
+		bndl(i)= -60;
+		bndu(i)= 60;
+	}
+
+	bndl(42)= fp_neginf;//-Infinity;
+	bndu(42)= fp_posinf;//+Infinity;
+
+	
 	real_1d_array x;
 	minqpstate state;
     minqpreport rep;
@@ -779,6 +802,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
     minqpsetquadraticterm(state, a);
 	//minqpsetlinearterm(state, l); non mi servono perchè di default sono già impostati a zero
     minqpsetlc(state, c, ct);
+	minqpsetbc(state, bndl, bndu);
 	
 	minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0);
     minqpoptimize(state);
@@ -786,6 +810,25 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	minqpresults(state, x, rep);
 
     printf("%s\n", x.tostring(1).c_str());
+	
+	vector<double> tau = { x(30),x(40),x(41),x(31),x(38),x(39),x(33),x(34),x(35),x(32),x(36),x(37)};
+	
+	std_msgs::Float64MultiArray msg;
+
+	// set up dimensions
+	msg.layout.dim.push_back(std_msgs::MultiArrayDimension());
+	msg.layout.dim[0].size = tau.size();
+	msg.layout.dim[0].stride = 1;
+	msg.layout.dim[0].label = "x"; // or whatever name you typically use to index vec1
+
+	// copy in the data
+	msg.data.clear();
+	msg.data.insert(msg.data.end(), tau.begin(), tau.end());
+	//tau<<x(30),x(40),x(41),x(31),x(38),x(39),x(33),x(34),x(35),x(32),x(36),x(37);
+	_tau_pub.publish(msg);
+	
+	//printf("%d\n", int(rep.terminationtype)); // se positiva la soluzione esiste
+	//cout<<"x:"<<x(0)<<endl;
 
 /*
 	cout<<"coriolis: "<<endl;
