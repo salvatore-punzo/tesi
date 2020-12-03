@@ -709,9 +709,9 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 		waypoints.push_back(waypoint);
 	}
 	VectorXd maxAcceleration(3);
-	maxAcceleration << 1.0, 1.0, 1.0;
+	maxAcceleration << 1.0, 1.0, 1.0; //valori messi a caso
 	VectorXd maxVelocity(3);
-	maxVelocity << 1.0, 1.0, 1.0;
+	maxVelocity << 1.0, 1.0, 1.0; 
 
 	Trajectory trajectory(Path(waypoints, 0.1), maxVelocity, maxAcceleration);
 	trajectory.outputPhasePlaneTrajectory();
@@ -804,11 +804,29 @@ for(double t = 0.0; t < duration; t += 0.1) {
 	bndl.setlength(43);
 	real_1d_array bndu;
 	bndu.setlength(43);
-	for(int i = 0; i<30; i++){
-		bndl(i)=-20;// fp_neginf;//-INFINITY
-		bndu(i)=20;// fp_posinf;//+INFINITY
+	VectorXd qmin(12);
+	VectorXd qmax(12);
+	double dt=0.01;
+	double Dt=10*dt;
+	qmin<<-1.7453,-1.7453,-1.7453,-1.7453,-3.14159265359,-0.02,-1.57079632679,-2.61795,-1.57079632679,-2.61795,-3.14159265359,-0.02;
+	qmax<<1.7453, 1.7453, 1.7453, 1.7453, 1.57079632679, 2.61795, 3.14159265359, 0.02, 3.14159265359, 0.02, 1.57079632679, 2.61795;
+	
+	//Vincoli sulle accelerazioni ai giunti virtuali
+	for(int i = 0; i<6; i++){
+		bndl(i)=fp_neginf;//-INFINITY
+		bndu(i)=fp_posinf;//+INFINITY
 	}
-
+	//Vincoli sulle accelerazioni
+	for(int i = 6; i<18; i++){
+		bndl(i)=(2/pow(Dt,2)) * (qmin(i-6)-q_joints(i-6)- Dt * dq_joints(i-6));// fp_neginf;//-INFINITY
+		bndu(i)=(2/pow(Dt,2)) * (qmax(i-6)-q_joints(i-6)- Dt * dq_joints(i-6));// fp_posinf;//+INFINITY
+	}
+	//Vincoli sulle forze di contatto
+	for(int i = 18; i<30; i++){
+		bndl(i)=fp_neginf;//-INFINITY
+		bndu(i)=fp_posinf;//+INFINITY
+	}
+	//Vincoli sulle coppie
 	for(int i=30; i<42; i++){
 		bndl(i)= -60;
 		bndu(i)= 60;
