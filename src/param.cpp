@@ -19,6 +19,11 @@
 #include "tesi/quadruped.h"
 #include <std_msgs/Float64MultiArray.h>
 
+#include "Trajectory/Trajectory.h"
+#include "Trajectory/Path.h"
+#include "Trajectory.cpp"
+#include "Path.cpp"
+
 #include "tesi/optimization.h"
 #include "tesi/stdafx.h"
 #include "ap.cpp"
@@ -214,9 +219,9 @@ ROS_SUB::ROS_SUB() {
 
 void ROS_SUB::Joint_cb(sensor_msgs::JointStateConstPtr js){
 	
-	//mi servono le 4 posizione dei giunti di hip e le 4 coppie applicate a questi
 	
-	hp.bl = js->position[1]; //in questo modo prendo il secondo elemento del vettore position nello specifico:back_left_pitch_joint
+	
+	hp.bl = js->position[1]; //back_left_pitch_joint
 	hp.br= js->position[4];
 	hp.fl= js->position[7];
 	hp.fr= js->position[10];
@@ -281,7 +286,7 @@ void ROS_SUB::VCom_cb(geometry_msgs::TwistStampedConstPtr data){
 
 void ROS_SUB::eebl_cb(gazebo_msgs::ContactsStateConstPtr eebl){
 	
-	float alpha = - _kblp/2; //la forza misurata dal vettore ha asse x lungo la gamba fisica. Se ruoto di questa 
+	float alpha = - _kblp/2; //la forza misurata dal vettore ha l'asse x nella direzione della gamba fisica. Se ruoto di questa 
 	Matrix3d rot_y;//quantità porto il vettore ad avere asse z lungo la componente della gamba virtuale.
 	
 	rot_y << cos(alpha), 0, sin(alpha),
@@ -684,19 +689,38 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	Matrix<double,3,18> Jt1;
 	Matrix<double,3,18> Jt1_T;
 	Matrix<double,3,1> Jt1_Tdot_dq;
-	//Matrix<int,37,1> CT;
+	
 	int CT[37];
 	Vector3d e;
 	Vector3d e_dot;
 	double kp=4;
-	double kd=sqrt(kp);
+	double kd=2*sqrt(kp);
+
+	//-------------------------- Inizio traiettoria --------------------------
 	double com_zdes = 0.4;
-	e<<0,0,z_com-com_zdes;
-	e_dot<<0,0,zdcom;
-	/*
-	CT<<Matrix<int,30,1>::Zero(),
-		Matrix<int,7,1>::Ones();
-*/
+	double dist = com_zdes-z_com;
+	double step = dist/100;
+ 
+	list<VectorXd> waypoints;
+	VectorXd waypoint(3);
+	for (int i = 0; i<100; i++){
+		
+		waypoint << x_com, y_com, z_com + step*i;
+		waypoints.push_back(waypoint);
+	}
+	VectorXd maxAcceleration(3);
+	maxAcceleration << 1.0, 1.0, 1.0;
+	VectorXd maxVelocity(3);
+	maxVelocity << 1.0, 1.0, 1.0;
+
+	Trajectory trajectory(Path(waypoints, 0.1), maxVelocity, maxAcceleration);
+	trajectory.outputPhasePlaneTrajectory();
+
+	double duration = trajectory.getDuration();
+
+	
+
+	//Jacobian task 1
 	
 
 	Jt1<<Matrix<double,1,18>::Zero(),
@@ -707,7 +731,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 
 	Jt1_Tdot_dq<<Jt1 * T_dot * dq_joints_total;
 
-
+	//Sn è la matrice che seleziona le componenti sull'asse z delle forze di contatto
 	Sn<<0,0,1,Matrix<double,1,9>::Zero(),
 		Matrix<double,1,5>::Zero(),1,Matrix<double,1,6>::Zero(),
 		Matrix<double,1,8>::Zero(),1,Matrix<double,1,3>::Zero(),
@@ -722,7 +746,7 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 
 
 
-	//imposto problema quadratico
+	//imposto il problema quadratico
 	Matrix<double,43,43> aa;
 	aa<<Matrix<double,43,43>::Zero();
 	aa(42,42)=1;
@@ -730,12 +754,11 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	a.setlength(43,43);
 	a.setcontent(43,43,&aa(0,0));
 	
-    real_1d_array l;
-	l.setlength(43);
+  
     real_1d_array s;
 	s.setlength(43);
 	for(int i = 0; i< 43; i++){
-		l(0)=0;
+		
 		s(0)=1;
 	} 
 	
@@ -748,11 +771,16 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	
 	
 	Matrix<double,37,44> A;
+
+for(double t = 0.0; t < duration; t += 0.1) {
+		e<<0,0,z_com-trajectory.getPosition(t)[2];
+		e_dot<<0,0,trajectory.getVelocity(t)[2];
+	
 	A<<M,Jc_T_B,S_T,Matrix<double,18,1>::Zero(),-b,
 		B_T_Jc, Matrix<double,12,25>::Zero(),B.transpose()*Jcdqd,
 		Matrix<double,4,18>::Zero(), Sn, Matrix<double,4,13>::Zero(),Matrix<double,4,1>::Zero(),
 		Jt1_T, Matrix<double,3,24>::Zero(),Matrix<double,3,1>::Ones(), -Jt1_Tdot_dq -kd*e_dot - kp * e;
-
+	
 	//cout<<"A:"<<endl;
 	//cout<<A<<endl;
 	c.setlength(37,44);
@@ -761,13 +789,13 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	
 	
 
-	//parametro che imposta il vincolo di uguaglianza
+	//parametro che imposta la tipologia del vincolo 
 	integer_1d_array ct;
 	ct.setlength(37);
 	for(int i = 0; i <30; i++){
 		ct(i) = 0;
 	}
-	for(int i = 31; i<37; i++){
+	for(int i = 30; i<37; i++){
 		ct(i) = 1;
 	}
 
@@ -777,8 +805,8 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	real_1d_array bndu;
 	bndu.setlength(43);
 	for(int i = 0; i<30; i++){
-		bndl(i)= fp_neginf;//-INFINITY;
-		bndu(i)= fp_posinf;//+INFINITY;
+		bndl(i)=-20;// fp_neginf;//-INFINITY
+		bndu(i)=20;// fp_posinf;//+INFINITY
 	}
 
 	for(int i=30; i<42; i++){
@@ -786,13 +814,14 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 		bndu(i)= 60;
 	}
 
-	bndl(42)= fp_neginf;//-Infinity;
-	bndu(42)= fp_posinf;//+Infinity;
+	bndl(42)= fp_neginf;//-Infinity
+	bndu(42)= fp_posinf;//+Infinity
 
 	
 	real_1d_array x;
 	minqpstate state;
     minqpreport rep;
+
 	 // NOTE: for convex problems you may try using minqpsetscaleautodiag()
     //       which automatically determines variable scales.
 	minqpsetscale(state, s);
@@ -826,25 +855,11 @@ void ROS_SUB::modelState_cb(gazebo_msgs::ModelStatesConstPtr pt){
 	msg.data.insert(msg.data.end(), tau.begin(), tau.end());
 	//tau<<x(30),x(40),x(41),x(31),x(38),x(39),x(33),x(34),x(35),x(32),x(36),x(37);
 	_tau_pub.publish(msg);
-	
+	}
 	//printf("%d\n", int(rep.terminationtype)); // se positiva la soluzione esiste
 	//cout<<"x:"<<x(0)<<endl;
 
-/*
-	cout<<"coriolis: "<<endl;
-	cout<<b<<endl;
 
-	cout<<"Matrice di inerzia"<<endl;
-	cout<<M<<endl;
-	
-	cout<<"Jacobian: "<<endl;
-	cout<<Jcdqd<<endl;
-	*/
-	
-	/*	concatenare matrici con eigen
-		MatrixXd D(A.rows()+B.rows(), A.cols()); 
-		D << A, B; 
-	*/
 
 
 

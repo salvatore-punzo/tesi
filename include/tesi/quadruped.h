@@ -37,7 +37,9 @@ class QUADRUPED
   Eigen::MatrixXd getJacobian();
   Eigen::MatrixXd getBiasAcc();
   Eigen::MatrixXd getTransMatrix();
+
   Eigen::MatrixXd getTdotMatrix();
+  
   Eigen::VectorXd getBiasMatrixCOM();
 	Eigen::VectorXd getGravityMatrixCOM();
 	Eigen::MatrixXd getMassMatrixCOM();

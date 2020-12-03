@@ -495,7 +495,7 @@ Eigen::MatrixXd QUADRUPED::getTransMatrix()
 	return trans;
 
 }
-//return matrix T_dot
+//return matrix T_dot 
 Eigen::MatrixXd QUADRUPED::getTdotMatrix()
 {
 	Eigen::Matrix<double,18,18> t_dot = iDynTree::toEigen(T_inv_dot);
